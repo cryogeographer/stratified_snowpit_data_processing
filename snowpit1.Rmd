@@ -1,0 +1,550 @@
+---
+title: "Snowpack Chemistry Project - Physical Snowpack Data Script"
+author: Graham Sexstone and Jeffrey Schmidt
+date: 01/03/2021
+output: 
+  pdf_document: default
+---
+
+# From transcription to usable data
+
+> This R project produces a stratified snowpit data frame from the transcription and digitization steps. In addition it facilitates appending the next year of data into the raw transciption set. After the layered values are developed through current the last few code chunks calcualte a snowpit summary for each variable.
+
+
+```{r include=F, echo=FALSE, message=FALSE, warning=F}
+
+#####################################################################################################
+#Snowpack Chemistry Project - Physical Snowpack Data Script
+#Prepared by: Graham Sexstone
+#updated by: Jeffrey Schmidt
+#Last Updated: 2021-01-03
+#####################################################################################################
+
+# libraries
+
+library(classInt)
+library(RColorBrewer)
+library(tidyverse)
+library(lmSupport)
+library(ggpubr)
+library(knitr)
+library(kableExtra)
+library(car)
+library(stargazer)
+library(stringr)
+
+
+theme_set(theme_classic())
+
+```
+
+
+
+```{r echo=FALSE, message=FALSE}
+
+# read in the student digitized/transcribed snowpit data
+
+
+snowpit_layers_raw <- read.csv("snowpit_layers_2.csv")
+
+snowpit_layers_raw$Date <- lubridate::mdy(snowpit_layers_raw$Date)
+snowpit_layers_raw$Time <- lubridate::hms(snowpit_layers_raw$Time)
+
+snowpit_layers_raw <- snowpit_layers_raw %>% filter(Date < "2020-01-01")
+
+```
+
+
+
+
+```{r echo=FALSE, message=FALSE}
+
+# Read in the most recent year of data to append to the transcribed data.
+
+snowpit_layers_2020 <- read.csv("reexternalsnowpits2020/snowpit_layers_2020.csv")
+snowpit_layers_2020$Date <- lubridate::ymd(snowpit_layers_2020$Date)
+snowpit_layers_2020$Time <- lubridate::hms(snowpit_layers_2020$Time)
+
+
+```
+
+
+
+
+
+```{r echo=FALSE, message=FALSE, warning=F}
+
+
+# Make names consistent between student transciption and USGS method.
+
+snowpit_layers_2020 <- snowpit_layers_2020 %>% dplyr::rename(Site_Name = Site.Name) 
+graham_names <- unique(as.character(snowpit_layers_2020$Site_Name))
+jeff_names <- unique(as.character(snowpit_layers_raw$Site_Name))
+
+x <- c("Daisy Pass","Noisy Basin", 
+                       "Apgar Lookout", 
+                       "Big Mountain", 
+                       "Granite Pass", 
+                       "Red Mountain", 
+                       "Lionshead", 
+                       "Slumgullion Pass",
+                       "Wolf Creek Pass",
+                       "Canyon", 
+                       "Lewis Lake Divide",
+                       "Sylvan Lake",
+                       "Big Sky",
+                       "Spring Gulch",
+                       "Kings Hill",
+                       "Mount Belmont",
+                       "Snowbowl",
+                       "Galena Summit",
+                       "Banner Summit",
+                       "Chief Joe Pass",
+                       "Hopewell",
+                       "Taos Ski Valley",
+                       "Music Pass",
+                       "Monarch Pass",       
+                       "Brumley",
+                       "Dry Lake",
+                       "Elk River",
+                       "Buffalo Pass",
+                       "Ripple Creek NADP",
+                       "Fremont Pass",
+                       "University Camp",
+                       "Lake Fork",
+                       "Berthoud Pass",
+                       "Loveland Pass",
+                       "Grizzly Ridge",
+                       "Brooklyn Lake",
+                       "Divide Peak",
+                       "Old Battle",
+                       "Rabbit Ears 1",
+                       "Cameron Pass",
+                       "Sunlight Peak",
+                       "Grand Mesa",
+                       "Red Mountain Pass",
+                       "Rendezvous Mountain",
+                       "Garnet Canyon",
+                       "Teton Pass",
+                       "Four Mile Meadow",
+                       "Togwotee",
+                       "South Pass")  
+Site_Name <- sort(x)
+my_names <- c("apgar_lookout",
+                                 "banner_summit",
+                                 "berthoud_pass",
+                                 "big_mountain",
+                                 "big_sky",
+                                 "brooklyn_lake",
+                                 "brumley",
+                                 "buffalo_pass",
+                                 "cameron_pass",
+                                 "canyon",
+                                 "chief_joseph_pass",
+                                 "daisy_pass",
+                                 "divide_peak",
+                                 "dry_lake",
+                                 "elk_river",
+                                 "four_mile_meadow",
+                                 "fremont_pass",
+                                 "galena_summit",
+                                 "garnet_canyon",
+                                 "grand_mesa",
+                                 "granite_pass",
+                                 "grizzly_ridge",
+                                 "hopewell",
+                                 "kings_hill",
+                                 "lake_fork",
+                                 "lewis_lake_divide",
+                                 "lionshead",
+                                 "loveland_pass",
+                                 "monarch_pass",
+                                 "mount_belmont",
+                                 "music_pass",
+                                 "noisy_basin",
+                                 "old_battle",
+                                 "rabbit_ears_one",
+                                 "red_mountain_montana",
+                                 "red_mountain_pass",
+                                 "rendezvous_peak",
+                                 "ripple_creek",
+                                 "slumgullion_pass",
+                                 "snowbowl",
+                                 "south_pass",
+                                 "spring_gulch",
+                                 "sunlight_peak",
+                                 "sylvan_lake",
+                                 "taos_ski_valley",
+                                 "teton_pass",
+                                 "togwotee_pass",
+                                 "university_camp",
+                                 "wolf_creek_pass")
+
+Site_Name_Key <- data.frame(Site_Name, my_names)
+
+```
+
+
+
+
+```{r echo=FALSE, message=FALSE, warning=F}
+
+# format header information
+
+snowpit_layers_2020 <- rename(snowpit_layers_2020, Lower_depth_cm = "Lower.depth..cm.",
+                              Upper_depth_cm = "Upper.depth..cm.",
+                              Snow_Temperature_C = "Snow.temperature..C."
+                              )
+
+
+snowpit_layers_2020 <- inner_join(snowpit_layers_2020, Site_Name_Key, by = "Site_Name")
+
+
+```
+
+
+
+```{r echo=FALSE, message=FALSE, warning=F}
+
+# output a data table for the most current observation for safe keeping
+
+write.table(
+  snowpit_layers_2020,
+  paste0("snowpit_layers_2020_2", ".csv"),
+  sep = ",",
+  row.names = FALSE,
+  col.names = TRUE
+)
+
+```
+
+
+
+```{r echo=FALSE, message=FALSE, warning=F}
+
+#calculations
+
+#average cutter mass
+
+
+snowpit_layers_raw <- snowpit_layers_raw %>% 
+  mutate(mass_ave = rowMeans(cbind(Mass_1_g,Mass_2_g,Mass_3_g), na.rm=T))
+plot(snowpit_layers_raw$mass_ave)
+
+```
+
+
+
+```{r echo=FALSE, message=FALSE, warning=F}
+
+# middle snow depth of layer
+
+snowpit_layers_2020 <- snowpit_layers_2020 %>% 
+  mutate(middle_depth=rowMeans(cbind(Lower_depth_cm,Upper_depth_cm), na.rm=T))
+
+snowpit_layers_raw <- snowpit_layers_raw %>% 
+  mutate(middle_depth=rowMeans(cbind(Lower_depth_cm,Upper_depth_cm), na.rm=T))
+
+plot(snowpit_layers_2020$middle_depth)
+plot(snowpit_layers_raw$middle_depth)
+
+```
+
+
+
+
+```{r echo=FALSE, message=FALSE, warning=F}
+
+#snow depth range of layer
+
+snowpit_layers_2020 <- snowpit_layers_2020 %>% 
+  mutate(layer_depth=Upper_depth_cm - Lower_depth_cm)
+
+snowpit_layers_raw <- snowpit_layers_raw %>% 
+  mutate(layer_depth=Upper_depth_cm - Lower_depth_cm)
+
+plot(snowpit_layers_2020$layer_depth)
+plot(snowpit_layers_raw$layer_depth)
+
+```
+
+ $ Layer_Snow_Density_kg_m3: num  424 474 502 409 433 466 140 363 456 376 ...
+ $ Layer_SWE_mm 
+
+
+
+
+```{r echo=FALSE, message=FALSE, warning=F}
+
+# updated cutter size (considering layer)
+# make the layer depth a percentage
+
+snowpit_layers_raw <- snowpit_layers_raw %>% 
+  mutate(updated_cutter=ifelse(layer_depth<10,layer_depth/10*Cutter_Size_cc,Cutter_Size_cc))
+plot(snowpit_layers_raw$updated_cutter)
+
+```
+
+
+
+
+
+```{r echo=FALSE, message=FALSE, warning=F}
+
+# layer density
+snowpit_layers_raw <- snowpit_layers_raw %>% 
+  mutate(layer_density=mass_ave/updated_cutter)
+
+snowpit_layers_2020 <- snowpit_layers_2020 %>% mutate(layer_density=(SWE..mm./(layer_depth*10)))
+
+
+plot(snowpit_layers_raw$layer_density)
+plot(snowpit_layers_2020$layer_density)
+
+
+```
+
+
+
+
+```{r echo=FALSE, message=FALSE, warning=F}
+
+# layer SWE
+
+snowpit_layers_raw <- snowpit_layers_raw %>% 
+  mutate(layer_swe=(layer_density*(layer_depth*10)))
+
+plot(snowpit_layers_raw$layer_swe)
+plot(snowpit_layers_2020$SWE..mm.)
+
+```
+
+
+
+
+
+```{r echo=FALSE, message=FALSE, warning=F}
+
+# join the two data frames
+
+snowpit_layers_2020 <- dplyr::select(snowpit_layers_2020, -Site_Name, -layer_density)
+
+snowpit_layers_2020 <- rename(snowpit_layers_2020, layer_swe = "SWE..mm.",
+                              Site_Name = "my_names",
+                              layer_density = "Snow.density..kg.m.3.")
+
+snowpit_layers_raw <- dplyr::select(snowpit_layers_raw , -Mass_1_g, 
+                                    -Mass_2_g,
+                                    -Mass_3_g,
+                                    -mass_ave,
+                                    -Cutter_Size_cc,
+                                    -updated_cutter)
+
+
+snowpit_layers_raw <- snowpit_layers_raw %>% mutate(layer_density = layer_density * 1000)
+
+layers_all_record <- bind_rows(snowpit_layers_2020, snowpit_layers_raw)
+
+plot(layers_all_record$layer_swe)
+plot(layers_all_record$layer_density)
+plot(layers_all_record$Snow_Temperature_C)
+plot(layers_all_record$middle_depth)
+plot(layers_all_record$Latitude)
+
+
+```
+
+
+
+
+
+```{r echo=FALSE, message=FALSE, warning=F}
+
+#layer cold content with a gradient heat capacity of ice
+
+
+layers_all_record <- layers_all_record %>% 
+  dplyr::mutate(cp=2067+6.89*Snow_Temperature_C)
+
+layers_all_record <- layers_all_record %>% 
+  mutate(layer_cc=(-cp*layer_swe*Snow_Temperature_C)/10**6)
+
+plot(layers_all_record$layer_cc)
+
+plot(layers_all_record$cp)
+
+
+
+```
+
+
+
+```{r echo=FALSE, message=FALSE, warning=F}
+
+# Create final dataframe to output the stratified data:
+
+variables_layers_1 <- c("Latitude",
+                      "Longitude",
+                      "Observers",
+                      "Date",
+                      "Time",
+                      "Lower_depth_cm",
+                      "Upper_depth_cm",
+                      "layer_density",
+                      "layer_swe",
+                      "Snow_Temperature_C",
+                      "Site_Name",
+                      "middle_depth",
+                      "layer_depth",
+                      "cp",
+                      "layer_cc")
+snowpit_layers <- layers_all_record[variables_layers_1]
+colnames(snowpit_layers) <- c("event_lat",
+                               "event_long",
+                              "Observers",
+                               "Date",
+                               "Time",
+                               "Lower_depth_cm",
+                               "Upper_depth_cm",
+                              "Layer_Snow_Density_kg_m3",
+                              "Layer_SWE_mm",
+                              "Snow_Temperature_C",
+                              "Site_Name",
+                              "Middle_Depth_cm",
+                              "Layer_Depth_cm",
+                              "Heat_Capacity_J",
+                              "Layer_CC_MJ_m2")
+
+```
+
+
+
+```{r echo=FALSE, message=FALSE, warning=F}
+
+# Output the layered data frame to use in the NSIDC archive
+# first order the columns in the best way.
+
+snowpit_layers <- snowpit_layers %>% select(Site_Name, everything())
+
+```
+
+
+
+```{r echo=FALSE, message=FALSE, warning=F}
+
+#Create a summary dataframe to provide bulk values for each snowpit:
+#sum
+
+sum_snowpit_2 <- snowpit_layers %>% group_by(Site_Name, Date, Time) %>%
+  summarise(event_lat = mean(event_lat, na.rm = TRUE),
+            event_long = mean(event_long, na.rm = TRUE),
+            Total_Depth_cm = max(Upper_depth_cm, na.rm=TRUE),
+            Bulk_Snow_Density_kg_m3 = mean(Layer_Snow_Density_kg_m3, na.rm=TRUE),
+            Bulk_SWE_mm = sum(Layer_SWE_mm), 
+            Bulk_Snow_Temperature_C = mean(Snow_Temperature_C, na.rm=TRUE), 
+            Bulk_CC_MJ_m2 = sum(Layer_CC_MJ_m2),
+            Heat_Capacity_J = mean(Heat_Capacity_J, na.rm=TRUE), n = n()) %>%
+  ungroup() 
+
+sum_snowpit_3 <- sum_snowpit_2 %>% rename(pit_layer_ct = "n")
+
+```
+
+
+
+```{r echo=FALSE, message=FALSE, warning=F}
+
+# put in the site details too
+# __Key to fix the site details, based on the site name__
+
+key <- read.csv("stn_name_key.csv")
+key$Station.Name.USGS = as.character(key$Station.Name.USGS)
+key$My.site.names = as.character(key$My.site.names)
+key <- rename(key, Station.Name = Station.Name.USGS)
+
+```
+
+
+
+
+
+```{r echo=FALSE, message=FALSE, warning=F}
+# __Bring in the locations list from the USGS website to start fixing the locations and station ID__
+site_details <- read.csv("site_details_usgswebsite.csv")
+site_details$Station.Number = as.double(site_details$Station.Number)
+site_details$Station.Name = as.character(site_details$Station.Name)
+site_details <- site_details %>% rename(general_lat = "Latitude", general_long = "Longtitude")
+
+```
+
+
+# Create final data-frame to output 
+
+```{r echo=FALSE, message=FALSE, warning=F}
+
+key <- rename(key, Site_Name = "My.site.names")
+key <- ungroup(key)
+site_details <- ungroup(site_details)
+sum_snowpit_3 <- ungroup(sum_snowpit_3)
+
+# layers_snowpit_longterm <- inner_join(layers_snowpit_all, key, by="Site_Name")
+site_details_all <- left_join(key, site_details, by="Station.Name")
+nomatch <- anti_join(sum_snowpit_3, site_details_all, by="Site_Name")
+nomatch_layers <- anti_join(layers_all_record, site_details_all, by="Site_Name")
+
+sum_snowpit_longterm_fin <- left_join(sum_snowpit_3, site_details_all, by="Site_Name")
+
+# for my studies
+#write.table(
+ # sum_snowpit_longterm_fin,
+#  paste0("sum_snowpit_fin", ".csv"),
+#  sep = ",",
+#  row.names = FALSE,
+#  col.names = TRUE
+#)
+
+```
+
+
+
+# Write to csv
+  1. Site Details Data Frame
+  2. Stratified (layered) Data Frame
+  3. Summary (bulk values) Data Frame
+  
+
+```{r}
+
+#1
+
+write.table(
+  site_details_all,
+  paste0("USGSRMS_network_site_details_2020", ".csv"),
+  sep = ",",
+  row.names = FALSE,
+  col.names = TRUE
+)
+
+#2
+
+write.table(
+  snowpit_layers,
+  paste0("snowpit_stratified_values_1992to2020", ".csv"),
+  sep = ",",
+  row.names = FALSE,
+  col.names = TRUE
+)
+
+#3
+
+write.table(
+  sum_snowpit_3,
+  paste0("snowpit_bulk_values_1992to2020", ".csv"),
+  sep = ",",
+  row.names = FALSE,
+  col.names = TRUE
+)
+
+```
+
+
